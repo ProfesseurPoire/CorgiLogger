@@ -131,11 +131,15 @@ namespace logger
     void message(const std::string& text, int line, const std::string& file,
                     const std::string& func, const std::string& channel = "all");
 
-    template<typename T>
+#ifdef __clang__
+#else
+template<typename T>
     concept HasStreamOperator = requires(T x, std::ostream os)
     {
         os << x;
     };
+#endif
+    
 
     /*!
         * @brief  Using a concept here to make sure that you send an object
@@ -143,7 +147,11 @@ namespace logger
         *          Also I'm still keeping the message/warning/error function
         *          to keep some stuff inside the implementation
         */
+    #ifdef __clang__ 
+    template<class T>
+    #else
     template<HasStreamOperator T>
+    #endif
     void variable(  const T& object, const std::string object_name, int line, const std::string& file, 
                         const std::string& func,const std::string& channel="all")
     {
