@@ -12,6 +12,10 @@
 // To change the log_level value, update this in the CMakeLists.txt: 
 // target_compile_definitions(<project> PUBLIC LOG_LEVEL=3)
 
+
+// TODO : Change LOG_LEVEL by ENABLE_MESSAGE = TRUE ENABLE_WARNING, ENABLE_ERROR
+// That way the user can configure what he wants to keep and it'll be less 
+// weird here
 #if LOG_LEVEL == 3
 #define log_variable_on(text, channel) logger::variable(text,#text,  __LINE__, __FILE__, __func__ , channel)
 #define log_variable(text) logger::variable(text,#text,  __LINE__, __FILE__, __func__ , "all")
