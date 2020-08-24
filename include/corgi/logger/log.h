@@ -54,6 +54,14 @@
 #define log_error(text)    
 #endif 
 
+#if LOG_MESSAGES == 1
+#define log_message(text) logger::message(text, __LINE__, __FILE__, __func__ , "default")
+#define log_message_on(test, channel) logger::message(text, __LINE__, __FILE__, __func__ , channel)
+#else
+#define log_message(text) 
+#define log_message_on(test, channel)
+#endif
+
 namespace corgi {
 
 /*!
@@ -132,7 +140,7 @@ namespace logger
         * @param[in] func     The function from which the logger was called
         * @param[in] channel  The channel on which the message will be displayed
         */
-    void message(const std::string& text, int line, const std::string& file,
+    void message(   const std::string& text, int line, const std::string& file,
                     const std::string& func, const std::string& channel = "all");
 
 #ifdef __clang__
@@ -146,11 +154,11 @@ template<typename T>
     
 
     /*!
-        * @brief  Using a concept here to make sure that you send an object
-        *          that has a << operator implemented
-        *          Also I'm still keeping the message/warning/error function
-        *          to keep some stuff inside the implementation
-        */
+     * @brief  Using a concept here to make sure that you send an object
+     *          that has a << operator implemented
+     *          Also I'm still keeping the message/warning/error function
+     *          to keep some stuff inside the implementation
+     */
     #ifdef __clang__ 
     template<class T>
     #else
@@ -174,7 +182,7 @@ template<typename T>
         * @param[in] func      The function that called the function
         * @param[in] channel   The channel on which the message will be displayed
     */
-    void warning(const std::string& message, int line, const std::string& file,
+    void warning(   const std::string& message, int line, const std::string& file,
                     const std::string& func, const std::string& channel = "all");
 
     /*!
@@ -185,7 +193,7 @@ template<typename T>
         * @param[in] func     The function from which the logger was called
         * @param[in] channel  The channel on which the message will be displayed
         */
-    void error(const std::string& text, int line, const std::string& file,
+    void error( const std::string& text, int line, const std::string& file,
                 const std::string& func, const std::string& channel = "all");
 
     /*!
