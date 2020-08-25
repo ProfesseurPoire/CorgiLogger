@@ -41,23 +41,101 @@ using namespace std;
 
 struct Channel
 {
-    std::vector<std::string> messages;
-    std::vector<std::string> errors;
-    std::vector<std::string> warnings;
+    // Stores the logs for each log level
+    std::map<corgi::logger::LogLevel , std::vector<std::string>> logs
+    {
+        { logger::LogLevel::Info,       std::vector<std::string>() },
+        { logger::LogLevel::Trace,      std::vector<std::string>() },
+        { logger::LogLevel::Debug,      std::vector<std::string>() },
+        { logger::LogLevel::Warning,    std::vector<std::string>() },
+        { logger::LogLevel::Error,      std::vector<std::string>() },
+        { logger::LogLevel::FatalError, std::vector<std::string>() }
+    };
 };
 
+static const std::map<corgi::logger::LogLevel, std::string> log_level_str
+{
+    {corgi::logger::LogLevel::Info,        "Info"},
+    {corgi::logger::LogLevel::Trace,       "Trace"},
+    {corgi::logger::LogLevel::Debug,       "Debug"},
+    {corgi::logger::LogLevel::Warning,     "Warning"},
+    {corgi::logger::LogLevel::Error,       "Error"},
+    {corgi::logger::LogLevel::FatalError,  "FatalError"}
+};
+
+// Could be on the cpp but I'll probably move everything in the header
+static const std::map<corgi::logger::LogLevel, int> color_code
+{
+    {corgi::logger::LogLevel::Info,        11},
+    {corgi::logger::LogLevel::Trace,       11},
+    {corgi::logger::LogLevel::Debug,       11},
+    {corgi::logger::LogLevel::Warning,     14},
+    {corgi::logger::LogLevel::Error,       12},
+    {corgi::logger::LogLevel::FatalError,  12}
+};
 
 static std::map<std::string, Channel>		channels_;
+static bool show_time_ {true};
+static bool write_logs_in_console_  {true};
+static bool write_logs_in_file_     {true};
+
+static std::string output_folder_{"logs"};
+static std::map<std::string, std::ofstream> files_;
 
 // Set that to false if you don't want the log operations to write
 // inside a file
-static bool write_in_file_ = true;
 
-static void write_string(const std::string& str, const std::string& channel, int t)
+void corgi::logger::toggle_file_output(bool value)
 {
+    write_logs_in_file_ = value;
+}
+
+void corgi::logger::toggle_console_output(bool value)
+{
+    write_logs_in_console_=value;
+}
+
+void corgi::logger::show_time(bool v)
+{
+    show_time_ = v;
+}
+
+void corgi::logger::set_folder(const std::string& path)
+{
+    output_folder_ = path;
+}
+
+static std::string filename(const std::string& path)
+{
+    for (size_t i = path.size() - 1; i > 0; --i)
+    {
+        if (path[i] == '/' || path[i] == '\\')
+        {
+            return path.substr(i + 1, std::string::npos);	//npos means until the end of the string
+        }
+    }
+    return "";
+}
+ 
+void corgi::logger::close_files()
+{
+    for(auto& file : files_)
+    {
+        file.second.close();
+    }
+}
+
+std::string build_string(corgi::logger::LogLevel log_level, int line, const std::string& file, const std::string& func, const std::string&text, const std::string channel)
+{
+    return  log_level_str.at(log_level) + " : {" +channel + "} : \"" + text +"\" at (" + filename(file) + "::" + func + " " + std::to_string(line) +  ") \n";
+}
+
+
+std::string get_time()
+{
+    // Probably should make a function for that 
 	std::time_t time	= std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
 	auto gmtime = std::gmtime(&time);
-	
 
     std::string minutes = std::to_string(gmtime->tm_min);
     if(gmtime->tm_min<10)
@@ -71,116 +149,76 @@ static void write_string(const std::string& str, const std::string& channel, int
         seconds = "0"+seconds;
     }
 
-    std::string new_str = str;
+    return (std::to_string(gmtime->tm_hour) + ":" +minutes+ ":" +seconds);
+}
 
-    if(logger::details::show_time_)
+void corgi::logger::details::write_log(const std::string& obj, const LogLevel log_level, const std::string& channel, const std::string& file, const std::string& func, const int line)
+{
+    auto str = build_string(log_level, line, file, func, obj, channel);
+
+    set_console_color(color_code.at(log_level));
+
+    if(show_time_)
     {
-        std::string time_str = std::to_string(gmtime->tm_hour) + ":" +minutes+ ":" +seconds ;
-        std::string new_str =  "["+ time_str +"] : " + str;
+        str =  "["+ get_time() +"] : " + str;
     }
 	
-    std::cout << new_str << std::flush;
-
-    if (channels_.count(channel)>0)
+    if(write_logs_in_console_)
     {
-        channels_.emplace(channel, Channel());
-    }
-    
-    switch (t)
-    {
-        case 0:
-            channels_[channel].messages.push_back(new_str);
-            break;
-        case 1:
-            channels_[channel].warnings.push_back(new_str);
-            break;
-        case 2:
-            channels_[channel].errors.push_back(new_str);
-            break;
+        std::cout << str << std::flush;
     }
 
-    if (write_in_file_)
+    channels_[channel].logs.at(log_level).push_back(str);
+
+    if (write_logs_in_file_)
     {
-        if (!logger::details::files_[channel].is_open())
+        if (!files_[channel].is_open())
         {
             //Creates the directory to store the logs if it doesn't exist already
-            std::filesystem::create_directory("logs");
+            std::filesystem::create_directory(output_folder_);
 
             // Opening/closing to erase the content of the file, a bit weird 
             // but if I open the file with trunc it won't write on it
-            logger::details::files_[channel].open(("logs/" + channel + ".log"), std::ofstream::out | std::ofstream::trunc);
-            logger::details::files_[channel].close();
-            logger::details::files_[channel].open(("logs/" + channel + ".log"), std::ofstream::out | std::ofstream::app );
+            files_[channel].open((output_folder_ +"/"+ channel + ".log"), std::ofstream::out | std::ofstream::trunc);
+            files_[channel].close();
+            files_[channel].open((output_folder_ +"/"+ channel + ".log"), std::ofstream::out | std::ofstream::app );
         }
-        if (logger::details::files_[channel].is_open())
+        if (files_[channel].is_open())
         {
-            logger::details::files_[channel] << new_str;
+            files_[channel] << str;
         }
     }
-}
 
-static std::string filename(const std::string& path)
-{
-    for (size_t i = path.size() - 1; i > 0; --i)
+    if(log_level == logger::LogLevel::FatalError || log_level== logger::LogLevel::Error)
     {
-        if (path[i] == '/' || path[i] == '\\')
+        #ifdef _WIN32
+
+        // Actually show the stack 
+
+        void* stack[200];
+        HANDLE process = GetCurrentProcess();
+        SymInitialize(process, NULL, TRUE);
+        WORD numberOfFrames = CaptureStackBackTrace(0, 200, stack, NULL);
+        SYMBOL_INFO* symbol = (SYMBOL_INFO*)malloc(sizeof(SYMBOL_INFO) + (200 - 1) * sizeof(TCHAR));
+        symbol->MaxNameLen = 200;
+        symbol->SizeOfStruct = sizeof(SYMBOL_INFO);
+        DWORD displacement;
+        IMAGEHLP_LINE64* line = (IMAGEHLP_LINE64*)malloc(sizeof(IMAGEHLP_LINE64));
+        line->SizeOfStruct = sizeof(IMAGEHLP_LINE64);
+        for (int i = 0; i < numberOfFrames; i++)
         {
-            return path.substr(i + 1, std::string::npos);	//npos means until the end of the string
+            DWORD64 address = (DWORD64)(stack[i]);
+            SymFromAddr(process, address, NULL, symbol);
+            if (SymGetLineFromAddr64(process, address, &displacement, line))
+            {
+                printf("\tat %s in %s: line: %lu: address: 0x%0X\n", symbol->Name, line->FileName, line->LineNumber, symbol->Address);
+            }
+            else
+            {
+                /*printf("\tSymGetLineFromAddr64 returned error code %lu.\n", GetLastError());
+                printf("\tat %s, address 0x%0X.\n", symbol->Name, symbol->Address);*/
+            }
         }
+    #endif
     }
-    return std::string();
-}
-
-// Here the static only mean that the function won't be defined in other translation unit
-static std::string build_string(const std::string& t, int line, const std::string& file, const std::string& func, const std::string&text, const std::string channel)
-{
-    return  t + " : {" +channel + "} : \"" + text +"\" at (" + filename(file) + "::" + func + " " + std::to_string(line) +  ") \n";
-}
-
-void logger::message(const std::string& text, int line, const std::string& file, const std::string& func, const std::string& channel)
-{
-    set_console_color(11);  // Blue
-    write_string(build_string("Message", line, file, func, text.c_str(), channel), channel, 0);
-}
-
-void logger::warning(const std::string& text, int line, const std::string& file, const std::string& func, const std::string& channel)
-{
-    set_console_color(14);  // Yellow
-    write_string(build_string("Warning", line, file, func, text, channel), channel, 1);
-}
-
-void logger::error(const std::string& text, int l, const std::string& file, const std::string& func, const std::string& channel)
-{
-    set_console_color(12); // Red
-    write_string(build_string("Error  ", l, file, func, text, channel), channel, 2);
-
-#ifdef _WIN32
-
-	void* stack[200];
-	HANDLE process = GetCurrentProcess();
-	SymInitialize(process, NULL, TRUE);
-	WORD numberOfFrames = CaptureStackBackTrace(0, 200, stack, NULL);
-	SYMBOL_INFO* symbol = (SYMBOL_INFO*)malloc(sizeof(SYMBOL_INFO) + (200 - 1) * sizeof(TCHAR));
-	symbol->MaxNameLen = 200;
-	symbol->SizeOfStruct = sizeof(SYMBOL_INFO);
-	DWORD displacement;
-	IMAGEHLP_LINE64* line = (IMAGEHLP_LINE64*)malloc(sizeof(IMAGEHLP_LINE64));
-	line->SizeOfStruct = sizeof(IMAGEHLP_LINE64);
-	for (int i = 0; i < numberOfFrames; i++)
-	{
-		DWORD64 address = (DWORD64)(stack[i]);
-		SymFromAddr(process, address, NULL, symbol);
-		if (SymGetLineFromAddr64(process, address, &displacement, line))
-		{
-			printf("\tat %s in %s: line: %lu: address: 0x%0X\n", symbol->Name, line->FileName, line->LineNumber, symbol->Address);
-		}
-		else
-		{
-			/*printf("\tSymGetLineFromAddr64 returned error code %lu.\n", GetLastError());
-			printf("\tat %s, address 0x%0X.\n", symbol->Name, symbol->Address);*/
-		}
-	}
-
-#endif
-	//return 0;
 }
