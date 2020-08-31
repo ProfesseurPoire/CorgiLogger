@@ -70,7 +70,7 @@ namespace corgi {
     using String = std::string;
 
 /*!
- * @brief  Provides functions to log informations about the application
+ * @brief  Provides functions to log information about the application
  * 
  * Do not directly use the functions inside the logger namespace.
  * You should use the log_message, log_warning and log_error macros. 
@@ -132,7 +132,7 @@ namespace logger
 
 namespace details
 {
-    void write_log(const std::string& obj, const LogLevel log_level, const std::string& channel, const std::string& file, const std::string& func, const int line);
+    void write_log(const std::string& obj, LogLevel log_level, const std::string& channel, const std::string& file, const std::string& func, int line);
 }
 
 // TODO :   Could also have a "Output" Class, one for ConsoleOutput, one for FileOutput

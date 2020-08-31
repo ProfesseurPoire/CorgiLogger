@@ -1,24 +1,18 @@
 #include <corgi/logger/log.h>
 
-#include <algorithm>
 #include <vector>
+#include <map>
+#include <string>
 
 #include <iostream>
 #include <fstream>
-
 #include <filesystem>
-
-#include <sstream>
-
-#include <map>
-#include <string>
 
 // Only here so I can have colors on windows
 #ifdef _WIN32
 #include <windows.h>   
 #endif // _WIN32
 #include <ctime>
-
 
 #ifdef _WIN32
 // Yoloed that, probably won't work on linux
@@ -42,7 +36,7 @@ using namespace std;
 struct Channel
 {
     // Stores the logs for each log level
-    std::map<corgi::logger::LogLevel , std::vector<std::string>> logs
+    std::map<logger::LogLevel , std::vector<std::string>> logs
     {
         { logger::LogLevel::Info,       std::vector<std::string>() },
         { logger::LogLevel::Trace,      std::vector<std::string>() },
@@ -53,14 +47,16 @@ struct Channel
     };
 };
 
-static const std::map<corgi::logger::LogLevel, std::string> log_level_str
+// Static variables are only initialized when the program actually uses them
+// so I think it's fine to keep all of that here
+static const std::map<logger::LogLevel, std::string> log_level_str
 {
-    {corgi::logger::LogLevel::Info,        "Info"},
-    {corgi::logger::LogLevel::Trace,       "Trace"},
-    {corgi::logger::LogLevel::Debug,       "Debug"},
-    {corgi::logger::LogLevel::Warning,     "Warning"},
-    {corgi::logger::LogLevel::Error,       "Error"},
-    {corgi::logger::LogLevel::FatalError,  "FatalError"}
+    {logger::LogLevel::Info,        "Info"},
+    {logger::LogLevel::Trace,       "Trace"},
+    {logger::LogLevel::Debug,       "Debug"},
+    {logger::LogLevel::Warning,     "Warning"},
+    {logger::LogLevel::Error,       "Error"},
+    {logger::LogLevel::FatalError,  "FatalError"}
 };
 
 // Could be on the cpp but I'll probably move everything in the header
@@ -85,17 +81,17 @@ static std::map<std::string, std::ofstream> files_;
 // Set that to false if you don't want the log operations to write
 // inside a file
 
-void corgi::logger::toggle_file_output(bool value)
+void corgi::logger::toggle_file_output(const bool value)
 {
     write_logs_in_file_ = value;
 }
 
-void corgi::logger::toggle_console_output(bool value)
+void corgi::logger::toggle_console_output(const bool value)
 {
     write_logs_in_console_=value;
 }
 
-void corgi::logger::show_time(bool v)
+void corgi::logger::show_time(const bool v)
 {
     show_time_ = v;
 }
@@ -125,17 +121,16 @@ void corgi::logger::close_files()
     }
 }
 
-std::string build_string(corgi::logger::LogLevel log_level, int line, const std::string& file, const std::string& func, const std::string&text, const std::string channel)
+std::string build_string(corgi::logger::LogLevel log_level, int line, const std::string& file, const std::string& func, const std::string&text, const std::string& channel)
 {
     return  log_level_str.at(log_level) + " : {" +channel + "} : \"" + text +"\" at (" + filename(file) + "::" + func + " " + std::to_string(line) +  ") \n";
 }
 
-
 std::string get_time()
 {
     // Probably should make a function for that 
-	std::time_t time	= std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
-	auto gmtime = std::gmtime(&time);
+	auto time	= std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+	auto gmtime     = std::gmtime(&time);
 
     std::string minutes = std::to_string(gmtime->tm_min);
     if(gmtime->tm_min<10)
